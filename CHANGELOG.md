@@ -6,6 +6,7 @@ All notable changes to peerlink. The format follows [Keep a Changelog](https://k
 
 ### Changed
 
+- README: says plainly that peerlink is built for Grok Bot, explains the problems that the catalog, Telegram approval and the doorbell solve, and adds a diagram of one approved run (`docs/flow.svg`, from `docs/flow.py`), a day-in-use example, what has been verified, and a Grok Bot routine instruction for the doorbell. The Chinese README now also describes approval of follow-up messages.
 - `SKILL.md` for remote agents: a follow-up message (`peerlink msg`) to a run of a task with `approve = true` waits for a new code like the run itself, and a `note` letter with `"event": "followup.dropped"` means the message was not approved. Agents get the new text the next time they download `/bundle.tar.gz`.
 
 ## [1.0.0] - 2026-11-04

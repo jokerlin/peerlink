@@ -25,6 +25,10 @@ The tests use fake `pi`, `codex` and `tailscale whois`, and make no network requ
 
 Add a test for every behavior you change. A change to identity, approval, file serving or cleanup needs a test in `tests/test_safety.py`.
 
+## Diagrams
+
+The README diagrams `docs/flow.svg` and `docs/flow.zh-CN.svg` are generated. Edit `docs/flow.py`, then run `python3 docs/flow.py` and check both files in a browser, in light and dark mode.
+
 ## Rules
 
 - Standard library only. Do not add third-party dependencies.
@@ -74,6 +78,10 @@ python3 -m unittest discover -s tests
 测试使用假的 `pi`、`codex` 和 `tailscale whois`，不访问网络。测试需要 `ps`：macOS 和 GitHub 的 Linux runner 自带；`python:*-slim` 这类精简容器要装 `procps`。CI 在 Ubuntu 和 macOS 上用 Python 3.11 和 3.13 运行测试。
 
 每个改动的行为都要加测试。涉及身份识别、审批、文件下载或进程清理的改动，要在 `tests/test_safety.py` 里加测试。
+
+### 流程图
+
+README 里的 `docs/flow.svg` 和 `docs/flow.zh-CN.svg` 是生成的。修改 `docs/flow.py` 后运行 `python3 docs/flow.py`，再在浏览器里用亮色和暗色模式检查两个文件。
 
 ### 规则
 
