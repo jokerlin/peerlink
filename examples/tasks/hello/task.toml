@@ -1,0 +1,20 @@
+# A harmless test task: echoes its params back, optionally after a short sleep.
+description = "Test task: echo the params back, optionally wait a few seconds"
+kind        = "script"
+command     = ["sh", "run.sh"]
+timeout     = "2m"
+locks       = ["test:hello"]
+
+[params.text]
+type = "string"
+max_length = 200
+default = "hello"
+
+[params.sleep]
+type = "integer"
+minimum = 0
+maximum = 60
+default = 0
+
+[report]
+on = ["finished"]

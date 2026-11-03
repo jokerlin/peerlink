@@ -1,0 +1,32 @@
+# Copy to ~/.peerlink/config.toml (chmod 600) and keep only what differs from the defaults
+# in peerlink/config.py.
+
+node   = "home-mac"                                  # shown to remote agents; default: hostname
+listen = ["100.64.0.1:8091", "127.0.0.1:8091"]       # your tailnet IP (tailscale ip -4) + loopback
+
+# Tasks with approve = true (e.g. the free-form ask) wait for you: peerlink sends the request
+# and a one-time code to Telegram, and the agent can only start the run with that code.
+# A shell env file with TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID; chmod 600, out of git.
+# Check it with `peerlink telegram-test`.
+# approval_telegram = "~/.peerlink/secrets/telegram.env"
+
+# Who may call this node, matched on `tailscale whois`. Anyone else gets 403.
+[principals.owner]
+local = true                                         # loopback is always the owner
+logins = ["you@example.com"]                         # your own devices on the tailnet
+daily_submits = 0                                    # 0 = unlimited
+
+# One table per remote agent. Tag its node in Tailscale (here tag:agent) and let your ACL
+# allow only tag:agent -> this node's peerlink port.
+[principals."grok/bot"]
+tags = ["tag:agent"]
+daily_submits = 20
+# Optional doorbell: a shell env file defining WEBHOOK_URL and WEBHOOK_TOKEN (sent as a
+# Bearer token). peerlink only sources it; keep it chmod 600 and out of git.
+doorbell = "~/.peerlink/secrets/agent-webhook.env"
+
+# Extra environment for task runs and the doorbell, e.g. if the agents need a proxy.
+# Exclude the tailnet from the proxy so peerlink's own traffic stays direct.
+# [env]
+# HTTPS_PROXY = "http://127.0.0.1:7890"
+# NO_PROXY    = "localhost,127.0.0.1,::1,100.64.0.0/10,.ts.net"

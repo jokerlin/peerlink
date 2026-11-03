@@ -1,0 +1,91 @@
+name: Release
+
+# Push a tag vX.Y.Z to publish a GitHub release with the notes from the
+# CHANGELOG.md section [X.Y.Z]. Run it by hand (workflow_dispatch) for a dry run:
+# it runs the tests and prints the notes, and creates no release.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to dry-run, for example 1.1.0 (no release is created)"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # tags, for the compare link
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: Tests
+        run: python -m unittest discover -s tests </dev/null
+      - name: Version
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = push ]; then v=${GITHUB_REF_NAME#v}; else v=$INPUT_VERSION; fi
+          case $v in
+            [0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "::error::not a version: $v"; exit 1 ;;
+          esac
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+      - name: Package version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          v=$(python -c 'import peerlink; print(peerlink.__version__)')
+          if [ "$v" != "$VERSION" ]; then
+            echo "::error::peerlink/__init__.py has version $v, but the release is $VERSION. Update it first."
+            exit 1
+          fi
+      - name: Release notes
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          sh scripts/release-notes.sh "$VERSION" > notes.md
+          if [ ! -s notes.md ]; then
+            echo "::error::CHANGELOG.md has no section [$VERSION]. Move the [Unreleased] entries under it first."
+            exit 1
+          fi
+          # The tag just below this version, for the compare link.
+          prev=$({ git tag --list 'v*'; echo "v$VERSION"; } | sort -uV |
+            awk -v t="v$VERSION" '$0 == t { print p; exit } { p = $0 }')
+          if [ -n "$prev" ]; then
+            printf '\n**Full changelog**: %s/%s/compare/%s...v%s\n' \
+              "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$prev" "$VERSION" >> notes.md
+          fi
+          cat notes.md
+          cat notes.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: notes
+          path: notes.md
+
+  release:
+    needs: check
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # create the release
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: notes
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "peerlink $VERSION" --notes-file notes.md

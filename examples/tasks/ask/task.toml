@@ -1,0 +1,21 @@
+# General-purpose task: the caller sends free text and an agent works on it.
+# The agent inherits the Pi / Codex permissions of the user running peerlink, so
+# every run by a remote caller waits for the owner's approval (approve = true, which needs
+# approval_telegram in config.toml). Set enabled = false to turn it off.
+description = "General task: research, write a small program, organize information. Say clearly in request what to do"
+kind        = "pi"
+approve     = true
+runbook     = "runbook.md"
+timeout     = "30m"
+
+[params.request]
+type = "string"
+max_length = 4000
+description = "What to do"
+
+[params.agent]
+enum = ["pi", "codex"]
+default = "pi"
+
+[report]
+on = ["finished"]

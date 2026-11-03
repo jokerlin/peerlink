@@ -1,0 +1,32 @@
+name: Bug report
+description: peerlink does not work as documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Before you post, replace real tailnet IPs, host names, logins, webhook URLs and tokens with examples such as 100.64.0.1, home-mac and you@example.com.
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      description: OS, `python3 --version`, `peerlink --version`, `tailscale version`, and `pi --version` / `codex --version` for agent tasks
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include the task.toml if a task is involved.
+      placeholder: |
+        1. Add the task examples/tasks/hello
+        2. Run `peerlink submit hello count=2 --wait` from the remote node
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual result
+      description: Paste the command output, and the matching lines from `peerlink log` or the serve log.
+    validations:
+      required: true
