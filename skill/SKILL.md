@@ -45,6 +45,8 @@ Tasks marked `"approve": true` in `peerlink tasks` do not start when you submit 
 2. Only when the user gives you a code, run `peerlink approve <run> <code>`.
 3. Never guess a code or get it any other way. Five wrong codes cancel the run, and an unused code expires after 30 minutes.
 
+Follow-up messages to these runs wait the same way. After `peerlink msg <run> "..."`, including an answer to a `run.question`, the run is `awaiting_approval` again, and the user gets your message and a new code on Telegram. Your message reaches the agent only after `peerlink approve <run> <code>` with that new code. If that code expires or gets five wrong tries, only your message is dropped: the run returns to its previous state, and you get a `note` letter.
+
 ## Files
 
 A run can send files back (screenshots, log excerpts). They are listed in the result as `files` (name, size, sha256). `sync --save DIR` downloads them to `DIR/<run>/`; `peerlink fetch <run>` downloads them on demand. Show images to the user when they help explain the result. This is the only way to get files from {{NODE}}: do not ask a task to start a server, open a port or encode files into text.
@@ -57,6 +59,7 @@ When a run finishes, {{NODE}} sends you a `run.result` letter; when an agent nee
 2. For each letter:
    - `run.result`: send the user a short summary in their language (task name, succeeded or failed, the key points of `summary`). If it failed, include `error`. If the letter has `files`, they are in `DIR/<run>/` (see `saved_files`); look at them and include the useful ones.
    - `run.question`: pass the question to the user, then send their answer back with `peerlink msg <run> "<answer>"`.
+   - `note` whose body has `"event": "followup.dropped"`: tell the user that the message to that run was not approved and was dropped. Send it again only if the user asks.
 3. `sync` acknowledges the letters it fetched. {{NODE}} only deletes acknowledged letters; anything not acknowledged can be fetched again.
 
 ## Rules

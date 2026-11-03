@@ -4,6 +4,10 @@ All notable changes to peerlink. The format follows [Keep a Changelog](https://k
 
 ## [Unreleased]
 
+### Changed
+
+- `SKILL.md` for remote agents: a follow-up message (`peerlink msg`) to a run of a task with `approve = true` waits for a new code like the run itself, and a `note` letter with `"event": "followup.dropped"` means the message was not approved. Agents get the new text the next time they download `/bundle.tar.gz`.
+
 ## [1.0.0] - 2026-11-04
 
 First public release.
