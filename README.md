@@ -2,19 +2,48 @@
 
 English | [简体中文](README.zh-CN.md)
 
-Let a remote AI agent run **tasks you have cataloged** on your own computer over Tailscale, and get the results back as letters — with a webhook "doorbell" to wake the agent up when something is waiting.
+**Give Grok Bot hands on your Mac, without giving it the keys.**
 
-Typical setup: a cloud agent (for example Grok's cloud computer) joins your tailnet with a tag. It can reach exactly one port on your Mac, where peerlink runs. It can only start tasks from a catalog you wrote (a fixed script, or a runbook for Pi / Codex), with parameters checked against a schema. When a run finishes, peerlink keeps the result as a letter and calls the agent's webhook; the agent wakes up, fetches the letter and tells you what happened.
+peerlink is built for Grok Bot. Grok Bot lives on a cloud computer: it can research, plan and talk to you, but it cannot open an app on your Mac, use your logins or look at your screen. peerlink lets it run the tasks *you* wrote down, on your Mac, over Tailscale. Anything free-form waits for a one-time code on your Telegram. When a run finishes, a doorbell wakes Grok Bot, which fetches the result and tells you.
 
-- Python standard library only (3.11+), plus the `tailscale` CLI.
-- Script tasks, plus agent tasks that run `pi --print` or `codex exec` with your existing settings and login.
-- Follow-up questions: an agent can ask the caller something and resume the same session when the answer arrives.
-- Concurrency limits, resource locks, per-day dedupe, daily submit caps, SQLite state, an audit log and an emergency stop.
+<p align="center"><img src="docs/flow.svg" width="860" alt="One approved run: Grok Bot submits a task to your Mac over the tailnet; peerlink sends you the request and a one-time code on Telegram; you tell Grok Bot the code; it approves the run; your Mac runs Pi or Codex and keeps the result as a letter; a content-free doorbell wakes Grok Bot; it syncs the letter and files over the tailnet and sends you a summary."></p>
+
+## Why peerlink
+
+Three problems come up as soon as a cloud agent should do something on your own computer.
+
+| Problem | What peerlink does |
+|---|---|
+| **A shell gives away everything.** With SSH, a confused or prompt-injected agent can do anything you can do. | **The catalog is the scope.** Grok Bot can only start tasks in `~/.peerlink/tasks`, with parameters checked against a schema. The tailnet ACL lets its tag reach only peerlink's port, and every request is identified with `tailscale whois`. |
+| **Some jobs need a human yes.** Not everything can be written as a script in advance. | **Approval on Telegram.** A task with `approve = true` waits until you give Grok Bot the 6-digit code that peerlink sent to your Telegram. Grok Bot never sees that chat, so it cannot approve itself. Each follow-up message to such a run needs a new code. |
+| **Grok Bot sleeps.** Its computer keeps no process running, so nothing is there to receive a result that arrives an hour later. | **A doorbell.** peerlink keeps the result as a letter and calls Grok Bot's [routine webhook](https://cursor.com/help/grok-bot/routines) with only `{"from", "pending"}`. Grok Bot wakes up, fetches the letter over the tailnet, and tells you. A leaked webhook URL can only wake Grok Bot; it reveals no result. |
+
+## What you get
+
+- **An audit log.** Every submit, approval request, approval, run, letter, doorbell ring and refused request is recorded in SQLite. `peerlink log` shows it.
+- **Caller text never reaches the prompt.** Parameters and free text go into the run's `request.json`. The agent gets the path and is told to treat the content as data.
+- **Letters that wait.** A result stays until Grok Bot acknowledges it, up to 7 days. The doorbell merges letters within 10 minutes and rings again after 1 h, 3 h and 9 h if nobody came.
+- **Files come back through peerlink.** A run puts screenshots or logs in `out/`. Grok Bot downloads them from the same port and checks their sha256.
+- **Agents that ask back.** A Pi or Codex task can ask a question. Grok Bot relays it to you, and your answer resumes the same session.
+- **Nothing a run starts outlives it.** When a turn ends, peerlink kills the processes the run left behind.
+- **Brakes.** Daily submit caps, concurrency limits, resource locks, per-day dedupe, timeouts, and `peerlink stop --all`.
+- **Small.** One Python process (standard library, 3.11+), one port, one SQLite file, plus the `tailscale` CLI.
+
+## A day with Grok Bot
+
+| When | What happens |
+|---|---|
+| Morning | A scheduled Grok Bot routine submits a script task with `dedupe = "per-day"`, so a retried routine does not run it twice. The run finishes, the doorbell rings, and Grok Bot sends you the result in chat. |
+| Afternoon | You ask Grok Bot to look into something on your Mac. It submits the free-form `ask` task. Your Telegram shows the request and a code. You tell Grok Bot the code, and Codex starts on your Mac. |
+| An hour later | The run saves a screenshot to `out/`. The doorbell wakes Grok Bot, which runs `peerlink sync`, then sends you a summary and the screenshot. |
+| Any time | If the agent on your Mac asks a question, Grok Bot passes it on. Your answer goes back as a follow-up, which waits for a new code. |
+
+**In daily use.** Between 2026-10-12 and 2026-11-03, one Grok Bot submitted a scheduled script task on 20 days, got 7 free-form runs approved on Telegram, received 36 doorbell rings and downloaded 65 files from runs. Any agent that can run Python and reach your tailnet can use peerlink the same way; Grok Bot is the one it was built and tested with.
 
 ## How it works
 
 ```
-remote agent (tag:agent)                     your computer
+Grok Bot (tag:agent)                         your Mac
 ┌──────────────────────┐   tailnet, one port  ┌──────────────────────────────────────┐
 │ peerlink.pyz submit  │ ───────────────────► │ peerlink serve                       │
 │ peerlink.pyz sync    │ ◄─────────────────── │  ├ identity: tailscale whois         │
@@ -30,6 +59,18 @@ remote agent (tag:agent)                     your computer
 4. **Letters.** When a run finishes (or an agent has a question), peerlink stores a letter for the caller and keeps it until the caller acknowledges it (up to 7 days).
 5. **Doorbell.** If the caller has a webhook configured, peerlink calls it with only `{"from": "<node>", "pending": N}` — no content. New letters ring at once but at most once per 10 minutes; unfetched letters ring again after 1 h, 3 h and 9 h.
 
+## What has been verified
+
+| Area | Status |
+|---|---|
+| Grok Bot's cloud computer to a Mac over Tailscale | In daily use since 2026-10-12. Grok Bot runs `tailscaled` in userspace mode from `/workspace`. |
+| Telegram approval | In daily use. Approval of follow-up messages is covered by tests; Grok Bot has not sent an approved follow-up yet. |
+| Agent tasks | Codex and Pi runs from Grok Bot have succeeded. |
+| Platforms | The node has only been used on macOS. The test suite runs on Ubuntu and macOS with Python 3.11 and 3.13. |
+| Security | No independent security audit. |
+
+peerlink is not a sandbox: Pi and Codex tasks run with your permissions (see below). It is also not a chat bus between agents: a caller starts tasks from your catalog and gets letters back.
+
 ## Security model
 
 Read this before exposing anything.
@@ -43,6 +84,7 @@ Read this before exposing anything.
 - **No browsers.** Loopback is the owner, so requests with browser headers (`Origin`, `Sec-Fetch-Site`), POSTs that are not `application/json`, and unknown `Host` names are refused. A web page open on your Mac cannot submit tasks.
 - **Caller input is data.** Parameters are schema-checked; free text is written to `request.json` and the prompt tells the agent to treat it as data.
 - **Secrets stay in shell env files.** Webhook URLs and tokens live in a `chmod 600` env file that is only `source`d by a shell; peerlink never reads it into Python or logs it, and the token reaches `curl` on stdin.
+- **Everything is logged.** The audit log in `~/.peerlink/peerlink.db` records who did what and when, including refused requests. Read it with `peerlink log`.
 - **Limits and brakes.** Per-principal daily caps, concurrency limits, per-task timeouts, and `peerlink stop --all` (cancel everything and refuse new work until `peerlink resume`).
 
 ## Install (macOS)
@@ -144,16 +186,23 @@ From anywhere on the tailnet (set `PEERLINK_PEER=http://<node>:8091` or pass `--
 | `GET /bundle.tar.gz` | any principal | Client zipapp + `SKILL.md` for remote agents |
 | `POST /admin/stop`, `POST /admin/resume` | owner | Emergency stop / resume |
 
-## Connecting a remote agent (Grok example)
+## Set up Grok Bot
 
 1. In Tailscale, create a tagged auth key (e.g. `tag:agent`, ephemeral, reusable) and add a grant so that the tag can reach only this node's port:
    ```jsonc
    {"src": ["tag:agent"], "dst": ["host:<your-node>"], "ip": ["tcp:8091"]}
    ```
-2. Have the agent join the tailnet with that key on its computer (Grok's cloud computer can run `tailscaled` in userspace mode from `/workspace`).
+2. Have Grok Bot join the tailnet with that key on its cloud computer. It can run `tailscaled` in userspace mode, with its state under `/workspace`, which survives a rebuild of the computer. Do not paste the auth key into a chat you want to keep.
 3. Add a principal for the tag in `config.toml` (see the example).
-4. The agent installs the client: `curl -s http://<node>:8091/bundle.tar.gz | tar xz -C /workspace/peerlink`. The bundle's `SKILL.md` (from `skill/SKILL.md`, with your node's name and address filled in) tells it how to submit tasks and handle letters.
-5. For the doorbell, create a webhook-triggered routine on the agent side whose prompt says to run `peerlink sync` and summarize the letters, and put its URL and token in the env file named by `doorbell` (`WEBHOOK_URL=…`, `WEBHOOK_TOKEN=…`, `chmod 600`).
+4. Grok Bot installs the client: `curl -s http://<node>:8091/bundle.tar.gz | tar xz -C /workspace/peerlink`. The bundle's `SKILL.md` (from `skill/SKILL.md`, with your node's name and address filled in) tells it how to submit tasks, handle approvals and read letters.
+5. For the doorbell, create a Grok Bot routine with a webhook trigger. Put its URL and key in the env file named by `doorbell` (`WEBHOOK_URL=…`, `WEBHOOK_TOKEN=…`, `chmod 600`); peerlink sends the key as a Bearer token. Give the routine an instruction like this:
+   ```text
+   When this routine is triggered by its webhook:
+   1. Make sure Tailscale is up on your computer.
+   2. Run: PEERLINK_PEER=http://<node>:8091 python3 /workspace/peerlink/bin/peerlink.pyz sync --save /workspace/peerlink/inbox
+   3. Handle each letter as /workspace/peerlink/SKILL.md says: send me a short summary of each run.result, and pass each run.question on to me.
+   ```
+6. Optional: a scheduled routine that submits a daily script task, for example `peerlink submit <task>` every morning.
 
 ## Approval codes on Telegram
 
@@ -166,6 +215,10 @@ From anywhere on the tailnet (set `PEERLINK_PEER=http://<node>:8091` or pass `--
    printf 'TELEGRAM_BOT_TOKEN=%s\nTELEGRAM_CHAT_ID=%s\n' '<TOKEN>' '<CHAT_ID>' > ~/.peerlink/secrets/telegram.env
    ```
 5. Add `approval_telegram = "~/.peerlink/secrets/telegram.env"` to `config.toml`, restart peerlink, and run `peerlink telegram-test`. If Telegram needs a proxy where you are, put it in `[env]`.
+
+## Related
+
+[yobiru](https://github.com/chekusu/yobiru) connects agents as peers, so that they can message each other and exchange files over Tailscale. peerlink borrowed its idea of passing caller text to an agent as data, never as instructions. Use yobiru when agents should talk to each other; use peerlink when a cloud agent should run a fixed set of jobs on your Mac under your approval.
 
 ## Development
 
